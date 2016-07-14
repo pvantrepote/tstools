@@ -3,8 +3,10 @@
 Set of TypeScript tools for Visual Studio Code. 
 
 ## IDE Feature
-![IDE](http://i.giphy.com/lSPZQEPhtgTxS.gif)
-![IDE](http://i.giphy.com/BWmJSbDEPhAHu.gif)
+
+![IDE](http://i.giphy.com/l46Cugpupotvp3S9y.gif)
+
+![IDE](http://i.giphy.com/26gLwUcGn8uMT2eNa.gif)
 
 ## Using
 
@@ -23,14 +25,6 @@ Implement interface works only for explicit interface import (import { MyInterfa
 ### 1.0.0
 
 Initial release of Implement interfaces and properties.
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
 
 ## License
 [MIT](LICENSE)
