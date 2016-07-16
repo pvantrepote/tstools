@@ -32,5 +32,9 @@ Implement interface works only for explicit interface import (import { MyInterfa
 * New command shortcut. CMD+SHIFT+I on OS X, CTRL+SHIFT+I on Windows
 * Update README
 
+### 1.0.2
+
+* Adding keywords for marketplace
+
 ## License
 [MIT](LICENSE)
