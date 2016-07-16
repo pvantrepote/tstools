@@ -1,6 +1,16 @@
 import * as vscode from 'vscode';
 import * as ts from 'typescript';
 import * as path from 'path';
+import * as fs from 'fs';
+
+interface CompilerOptions {
+	module: string;
+	target: string;
+}
+
+interface TSConfig {
+	compilerOptions: CompilerOptions;
+}
 
 export class TreeWalker {
 
@@ -10,8 +20,29 @@ export class TreeWalker {
 
 	constructor() {
 		this._options = {
-			moduleResolution: 1
+			moduleResolution: ts.ModuleResolutionKind.Classic,
+			target: ts.ScriptTarget.ES5
 		};
+
+		// Load the tsconfig.json
+		let tsPath = path.join(vscode.workspace.rootPath, 'tsconfig.json');
+		if (fs.existsSync(tsPath)) {
+			let tsConfig = require(tsPath) as TSConfig;
+			if (tsConfig.compilerOptions.target) {
+				switch (tsConfig.compilerOptions.target) {
+					case 'es6':
+						this._options.target = ts.ScriptTarget.ES6;
+						break;
+					case 'es5':
+						this._options.target = ts.ScriptTarget.ES5;
+						break;
+					default:
+					case 'es3':
+						this._options.target = ts.ScriptTarget.ES3;
+						break;
+				}
+			}			
+		}
 
 		this._host = ts.createCompilerHost(this._options, null);
 	}
@@ -32,10 +63,10 @@ export class TreeWalker {
 
 		if (!this._cachedFiles[path]) {
 			if (sourceCode) {
-				sourceFile = ts.createSourceFile(path, sourceCode, ts.ScriptTarget.ES5);
+				sourceFile = ts.createSourceFile(path, sourceCode, this._options.target);
 			}
 			else {
-				sourceFile = this._host.getSourceFile(path, ts.ScriptTarget.ES5, (error) => {
+				sourceFile = this._host.getSourceFile(path, this._options.target, (error) => {
 					console.error(error);
 				});
 			}

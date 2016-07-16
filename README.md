@@ -24,7 +24,13 @@ Implement interface works only for explicit interface import (import { MyInterfa
 
 ### 1.0.0
 
-Initial release of Implement interfaces and properties.
+* Initial release of Implement interfaces and properties.
+
+### 1.0.1
+
+* Use of the tsconfig for compiler options.
+* New command shortcut. CMD+SHIFT+I on OS X, CTRL+SHIFT+I on Windows
+* Update README
 
 ## License
 [MIT](LICENSE)
