@@ -4,7 +4,7 @@ import { ImportGeneratorContext } from '../Contexts/ImportGeneratorContext';
 
 export class ImportGenerator {
 
-	private static ImportTpl = "{0}import { {1} } from '{2}';{0}";
+	private static ImportTpl = "{0}import { {1} } from '{2}';";
 	private static refTpl = "/// <reference path=\"{1}\" />{0}";
 
 	public static Generate(context: ImportGeneratorContext): string {
