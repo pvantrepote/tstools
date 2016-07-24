@@ -36,7 +36,6 @@ export class Generator {
 			signature = PropertyGenerator.Generate(<ts.PropertySignature>node, source, context as InterfaceGeneratorContext);
 		}
 
-
 		if (signature) {
 			editor.insert(document.positionAt(context.insertAtOffset), signature);
 		}

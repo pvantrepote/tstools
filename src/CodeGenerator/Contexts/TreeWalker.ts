@@ -2,6 +2,9 @@ import * as vscode from 'vscode';
 import * as ts from 'typescript';
 import * as path from 'path';
 import * as fs from 'fs';
+import { SymbolProvider } from './Symbols/SymbolProvider';
+import { Symbol } from './Symbols/Symbol';
+
 
 interface CompilerOptions {
 	module: string;
@@ -12,13 +15,42 @@ interface TSConfig {
 	compilerOptions: CompilerOptions;
 }
 
+export class ResolvedSymbol extends Symbol {
+	symbol: string;
+
+	constructor(value: string, symbol: Symbol) {
+		super();
+
+		this.hasNamespace = symbol.hasNamespace;
+		this.moduleName = symbol.moduleName;
+		this.relativePath = symbol.relativePath;
+		this.symbol = value;
+		this.type = symbol.type;
+	}
+}
+
 export class TreeWalker {
 
 	private _host: ts.CompilerHost;
-	private _options: ts.CompilerOptions;
-	private _cachedFiles: { [name: string]: ts.SourceFile; } = {}
+	public get host(): ts.CompilerHost {
+        return this._host;
+	};
+   	public set host(value: ts.CompilerHost) {
+        this._host = value;
+    };
 
-	constructor() {
+	private _options: ts.CompilerOptions;
+	public get options(): ts.CompilerOptions {
+        return this._options;
+	};
+   	public set options(value: ts.CompilerOptions) {
+        this._options = value;
+    };
+
+	private _cachedFiles: { [name: string]: ts.SourceFile; } = {}
+	private _cacheEnabled: boolean;
+
+	constructor(cacheEnabled?: boolean) {
 		this._options = {
 			moduleResolution: ts.ModuleResolutionKind.Classic,
 			target: ts.ScriptTarget.ES5
@@ -27,8 +59,16 @@ export class TreeWalker {
 		// Load the tsconfig.json
 		let tsPath = path.join(vscode.workspace.rootPath, 'tsconfig.json');
 		if (fs.existsSync(tsPath)) {
-			let tsConfig = require(tsPath) as TSConfig;
-			if (tsConfig.compilerOptions.target) {
+			let tsConfig: TSConfig = null;
+
+			try {
+				tsConfig = require(tsPath) as TSConfig;
+			}
+			catch (error) {
+				console.error(error);
+			}
+
+			if ((tsConfig) && (tsConfig.compilerOptions.target)) {
 				switch (tsConfig.compilerOptions.target) {
 					case 'es6':
 						this._options.target = ts.ScriptTarget.ES6;
@@ -41,14 +81,125 @@ export class TreeWalker {
 						this._options.target = ts.ScriptTarget.ES3;
 						break;
 				}
-			}			
+			}
 		}
 
-		this._host = ts.createCompilerHost(this._options, null);
+		this._host = ts.createCompilerHost(this._options, true);
+		this._cacheEnabled = (cacheEnabled && (cacheEnabled == true));
 	}
 
 	public newLine(): string {
 		return this._host.getNewLine();
+	}
+
+	public walk(node: ts.Node, callback: (node: ts.Node) => any) {
+		ts.forEachChild(node, (child: ts.Node) => {
+			return callback(child);
+		});
+
+	}
+
+	public getNodeForSymbol(sourceFile: ts.SourceFile, symbol: ResolvedSymbol): ts.Node {
+		let currentNode: ts.Node = sourceFile;
+		let symbolValue = symbol.symbol;
+
+		// lookup the npde for the symbol
+		let foundNode: ts.Node = null;
+		let found: boolean = false;
+		while ((!found) && (currentNode)) {
+			foundNode = ts.forEachChild(currentNode, (child: ts.Node) => {
+				let childName = this.getTextForNode(child);
+				if (childName == symbolValue) {
+					found = true;
+					return child;
+				}
+				if ((symbolValue.startsWith(childName)) &&
+					(child.kind == ts.SyntaxKind.ModuleDeclaration) &&
+					(symbol.hasNamespace)) {
+					symbolValue = symbolValue.substr(childName.length + 1);
+					currentNode = this.getModuleBlock(child as ts.ModuleDeclaration);
+					return currentNode;
+				}
+			});
+		}
+
+		return foundNode;
+	}
+
+	public resolveSymbol(symbolStr: string): ResolvedSymbol {
+
+		let symbol = SymbolProvider.Instance.lookupSymbolSync(symbolStr);
+		if (!symbol) {
+			return null;
+		}
+
+		return new ResolvedSymbol(symbolStr, symbol);
+	}
+
+
+	/**
+	 * Resolve symbol for a specified node
+	 * 
+	 * @param {ts.SourceFile} sourceFile The source file of the node
+	 * @param {ts.Node} node The node
+	 * @returns {Thenable<ResolvedSymbol>}
+	 */
+	public resolveSymbolForNode(sourceFile: ts.SourceFile, node: ts.Node): ResolvedSymbol {
+
+		let toResolve: string;
+
+		let expression = this.getParentNodeOfKind<ts.ExpressionWithTypeArguments | ts.TypeReferenceNode>(sourceFile, node, [ts.SyntaxKind.ExpressionWithTypeArguments, ts.SyntaxKind.TypeReference]);
+		if (!expression) {
+			toResolve = this.getTextForNode(node);
+		}
+		else {
+			toResolve = this.getTextForNode(expression);
+		}
+
+		// Get the value of the expression
+		if (!toResolve) {
+			return null;
+		}
+
+		let symbol = SymbolProvider.Instance.lookupSymbolSync(toResolve);
+		if (!symbol) {
+			return null;
+		}
+
+		return new ResolvedSymbol(toResolve, symbol);
+	}
+
+	public getSourceFileForSymbol(symbol: Symbol) {
+		let filepath = path.join(vscode.workspace.rootPath, symbol.relativePath) + ".ts";
+		return this.getSourceFile(filepath);
+	}
+
+	/**
+	 *  Get a parent of specified node of a specific type
+	 * 
+	 * @template T
+	 * @param {ts.SourceFile} sourceFile The source file
+	 * @param {ts.Node} node The node
+	 * @param {ts.SyntaxKind[]} kinds Kinds of nodes we are looking for
+	 * @param {ts.Node} [currentNode]
+	 * @param {() => ts.Node} [lookupParent]
+	 * @returns {T} Return thre first found node or null
+	 */
+	public getParentNodeOfKind<T extends ts.Node>(sourceFile: ts.SourceFile, node: ts.Node, kinds: ts.SyntaxKind[], currentNode?: ts.Node): T {
+
+		if (!currentNode) {
+			currentNode = node;
+		}
+
+		if (currentNode.parent) {
+			if (kinds.indexOf(currentNode.parent.kind) != -1) {
+				return currentNode.parent as T;
+			}
+
+			return this.getParentNodeOfKind<T>(sourceFile, node, kinds, currentNode.parent);
+		}
+
+		return null;
 	}
 
 	/**
@@ -59,11 +210,11 @@ export class TreeWalker {
 	 * @returns {ts.SourceFile} Return the source file or null if not found
 	 */
 	public getSourceFile(path: string, sourceCode?: string): ts.SourceFile {
-		let sourceFile: ts.SourceFile;
+		let sourceFile: ts.SourceFile = this._cachedFiles[path];
 
-		if (!this._cachedFiles[path]) {
+		if (!sourceFile) {
 			if (sourceCode) {
-				sourceFile = ts.createSourceFile(path, sourceCode, this._options.target);
+				sourceFile = ts.createSourceFile(path, sourceCode, this._options.target, true);
 			}
 			else {
 				sourceFile = this._host.getSourceFile(path, this._options.target, (error) => {
@@ -71,15 +222,16 @@ export class TreeWalker {
 				});
 			}
 
-
-			this._cachedFiles[path] = sourceFile;
+			if (this._cacheEnabled) {
+				this._cachedFiles[path] = sourceFile;
+			}
 		}
 
-		return this._cachedFiles[path];
+		return sourceFile;
 	}
 
 	/**
-	 * Find the declaration node that contains the given node
+	 * Find the class or property declaration node that contains the given node
 	 * 
 	 * @param {ts.SourceFile} sourceFile The source file
 	 * @param {ts.Node} node The node
@@ -88,60 +240,7 @@ export class TreeWalker {
 	 * @returns {ts.Declaration} Return the declaration node or null if not found
 	 */
 	public findDeclarationForNode(sourceFile: ts.SourceFile, node: ts.Node, currentNode?: ts.Node, lookupParent?: () => ts.Node): ts.Declaration {
-
-		if (!currentNode) {
-			currentNode = sourceFile;
-		}
-
-		let found = ts.forEachChild(currentNode, (child: ts.Node) => {
-			if (child == node) {
-				if ((currentNode.kind == ts.SyntaxKind.PropertyDeclaration) ||
-					(currentNode.kind == ts.SyntaxKind.ClassDeclaration)) {
-					return currentNode;
-				}
-
-				let parent = lookupParent();
-				return parent
-			}
-
-			let parentNode = this.findDeclarationForNode(sourceFile, node, child, (): ts.Node => {
-				if ((currentNode.kind == ts.SyntaxKind.PropertyDeclaration) ||
-					(currentNode.kind == ts.SyntaxKind.ClassDeclaration)) {
-					return currentNode;
-				}
-
-				return (lookupParent) ? lookupParent() : null;
-			});
-
-			if (parentNode) {
-				return parentNode;
-			}
-		});
-
-		return found as ts.Declaration;
-	}
-
-	/**
-	 * Find property declaration (class or property) at a specified offset
-	 * 
-	 * @param {ts.SourceFile} sourceFile The source file tree
-	 * @param {number} offset The offset
-	 * @returns {ts.Declaration} Return the declaration or null if not found
-	 */
-	public findPropertyDeclarationAtOffset(sourceFile: ts.SourceFile, offset: number): ts.PropertyDeclaration {
-
-		// Find the class
-		let declarations = this.getAllNodesOfType<ts.PropertyDeclaration>(sourceFile, ts.SyntaxKind.PropertyDeclaration, (declaration: ts.PropertyDeclaration) => {
-			return ((declaration.pos <= offset) && (offset <= declaration.end));
-		});
-
-		//
-		if ((!declarations) || (!declarations.length)) {
-			console.warn("Class not found at offset '%d'", offset);
-			return null;
-		}
-
-		return declarations[0];
+		return this.getParentNodeOfKind<ts.Declaration>(sourceFile, node, [ts.SyntaxKind.PropertyDeclaration, ts.SyntaxKind.ClassDeclaration, ts.SyntaxKind.InterfaceDeclaration]);
 	}
 
 	/**
@@ -180,6 +279,15 @@ export class TreeWalker {
 		}
 
 		return this.getSourceFile(resolvedModule.resolvedModule.resolvedFileName);
+	}
+
+	public getModuleBlock(module: ts.ModuleDeclaration): ts.ModuleBlock {
+		let block = (module as ts.ModuleDeclaration).body;
+		while ((block.kind != ts.SyntaxKind.ModuleBlock) && block) {
+			block = (block as ts.ModuleDeclaration).body;
+		}
+
+		return block as ts.ModuleBlock;
 	}
 
 	/**
@@ -236,6 +344,12 @@ export class TreeWalker {
 	 */
 	public findNodeWithText<T extends ts.Node>(sourceFile: ts.SourceFile, text: string, kind?: ts.SyntaxKind | ts.SyntaxKind[], currentNode?: ts.Node): T {
 
+		let elements = text.split('.');
+		if (elements.length > 1) {
+			// Namepace included, lookup for it first
+
+		}
+
 		if (!currentNode) {
 			currentNode = sourceFile;
 		}
@@ -263,7 +377,40 @@ export class TreeWalker {
 		return foundNode as T;
 	}
 
+	/**
+	 * Get node at a specified offset
+	 * 
+	 * @template T
+	 * @param {ts.SourceFile} sourceFile The source file to look into
+	 * @param {number} offset The offset of the node we are looking for
+	 * @param {ts.Node} [currentNode]
+	 * @returns {T} The the node or null if not found
+	 */
+	public getNodeAtOffsetOfKinds<T extends ts.Node>(sourceFile: ts.SourceFile, offset: number, kinds: Array<ts.SyntaxKind>, currentNode?: ts.Node): T {
 
+		if (!currentNode) {
+			currentNode = sourceFile;
+		}
+
+		// Get all children
+		if ((currentNode.pos > offset) || (currentNode.end < offset)) {
+			return null;
+		}
+
+		if (kinds.indexOf(currentNode.kind) != -1) {
+			return currentNode as T;
+		}
+
+		let foundNode = ts.forEachChild(currentNode, (child: ts.Node) => {
+			return this.getNodeAtOffset(sourceFile, offset, child);
+		});
+
+		if (!foundNode) {
+			foundNode = currentNode;
+		}
+
+		return foundNode as T;
+	}
 
 	/**
 	 * Get node at a specified offset
@@ -302,6 +449,37 @@ export class TreeWalker {
 	 * @returns {string}
 	 */
 	public getTextForNode(node: ts.Node): string {
+
+		switch (node.kind) {
+			case ts.SyntaxKind.ExpressionWithTypeArguments:
+				let expression = node as ts.ExpressionWithTypeArguments;
+				if (expression.expression.kind == ts.SyntaxKind.PropertyAccessExpression) {
+					return this.getTextForNode(expression.expression as ts.PropertyAccessExpression);
+				}
+				else {
+					node = expression.expression;
+				}
+				break;
+			case ts.SyntaxKind.PropertyAccessExpression:
+				let name = this.getTextForNode((node as ts.PropertyAccessExpression).expression);
+				return name + '.' + this.getTextForNode((node as ts.PropertyAccessExpression).name);
+
+			case ts.SyntaxKind.ModuleDeclaration:
+				let childName = this.getTextForNode((node as ts.ModuleDeclaration).body);
+				return (node as ts.ModuleDeclaration).name.text + ((childName) ? ('.' + childName) : '');
+
+			case ts.SyntaxKind.TypeReference:
+				return this.getTextForNode((node as ts.TypeReferenceNode).typeName);
+			case ts.SyntaxKind.QualifiedName:
+				let left = this.getTextForNode((node as ts.QualifiedName).left);
+				let right = this.getTextForNode((node as ts.QualifiedName).right);
+				return left + "." + right;
+
+			default:
+				break;
+		}
+
+
 		if (node["name"]) {
 			if (node["name"]["text"]) {
 				return node["name"]["text"]

@@ -3,7 +3,7 @@ import * as ts from 'typescript';
 import { TreeWalker } from './TreeWalker';
 import { Declaration } from './Declaration';
 
-export abstract class CodeGeneratorContext<T extends ts.Declaration> {
+export abstract class CodeGeneratorContext<T extends ts.Node> {
 	public sourceFile: ts.SourceFile;
 	public declaringElements: T;
 

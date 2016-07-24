@@ -3,10 +3,11 @@ import { CodeGeneratorContext } from './CodeGeneratorContext';
 import { TreeWalker } from './TreeWalker';
 import { Declaration } from './Declaration';
 
+
 export class InterfaceGeneratorContext extends CodeGeneratorContext<ts.ClassDeclaration> {
 
 	private _parents: Array<Declaration>;
-	public get parents() : Array<Declaration> {
+	public get parents(): Array<Declaration> {
 		if (!this._parents) {
 			this._parents = new Array<Declaration>();
 			this.createParentsHierarchy(this.declaration.sourceFile, this.declaration.node as ts.InterfaceDeclaration);
@@ -23,7 +24,7 @@ export class InterfaceGeneratorContext extends CodeGeneratorContext<ts.ClassDecl
 		return "InterfaceGeneratorContext";
 	}
 
-	private createParentsHierarchy(currentTypeSource: ts.SourceFile, currentType: ts.InterfaceDeclaration) {
+	private createParentsHierarchy(currentTypeSource: ts.SourceFile, currentType: ts.InterfaceDeclaration | ts.ClassDeclaration) {
 
 		if (!currentType.heritageClauses) {
 			return;
@@ -35,32 +36,23 @@ export class InterfaceGeneratorContext extends CodeGeneratorContext<ts.ClassDecl
 					return this.walker.getTextForNode(expression.expression);
 				})
 				.map((selectedType: string) => {
-					let interfaceSourceFile = currentTypeSource;
+					// Find the Symbol
+					let symbol = this.walker.resolveSymbol(selectedType);
 
-					// First check if this is the declaration or the import
-					let typeDeclaration = this.walker.findNodeWithText<ts.InterfaceDeclaration>(interfaceSourceFile, selectedType, ts.SyntaxKind.InterfaceDeclaration);
-					if (!typeDeclaration) {
+					// Load the sourceFile
+					let interfaceSourceFile = this.walker.getSourceFileForSymbol(symbol);
 
-						// Ok, not declared in the document, then lookup the import.
-						interfaceSourceFile = this.walker.resolveType(currentTypeSource, selectedType);
-						if (!interfaceSourceFile) {
-							// Not in the import, ok, just return
-							return;
-						}
-
-						// Ok, now we lookup into the import file
-						typeDeclaration = this.walker.findNodeWithText<ts.InterfaceDeclaration>(interfaceSourceFile, selectedType, ts.SyntaxKind.InterfaceDeclaration);
-						if (!typeDeclaration) {
-							// Ohoh, .. Issue?
-							return;
-						}
-					}
+					// Get the declaration type
+					let typeDeclaration = this.walker.getNodeForSymbol(interfaceSourceFile, symbol) as ts.Declaration;
 
 					// Add to the list
 					this.parents.push(new Declaration(interfaceSourceFile, typeDeclaration));
 
-					// And again
-					this.createParentsHierarchy(interfaceSourceFile, typeDeclaration);
+					if (typeDeclaration.kind == ts.SyntaxKind.InterfaceDeclaration ||
+						typeDeclaration.kind == ts.SyntaxKind.ClassDeclaration) {
+						// And again
+						this.createParentsHierarchy(interfaceSourceFile, typeDeclaration as (ts.InterfaceDeclaration | ts.ClassDeclaration));
+					}
 				});
 
 		});

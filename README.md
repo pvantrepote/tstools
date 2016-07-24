@@ -15,6 +15,7 @@ First, you will need to install Visual Studio Code. In the command palette (`cmd
 ## Commands
 
 * `Implement` Implement interfaces or properties
+* `Import` Import dependencies
 
 ## Known Issues
 
@@ -35,6 +36,11 @@ Implement interface works only for explicit interface import (import { MyInterfa
 ### 1.0.2
 
 * Adding keywords for marketplace
+
+### 1.1.0
+
+* Adding support for namespace
+* Adding import
 
 ## License
 [MIT](LICENSE)

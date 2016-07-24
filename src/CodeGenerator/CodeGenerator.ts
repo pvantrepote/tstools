@@ -9,10 +9,12 @@ import { PropertyGeneratorContext } from './Contexts/PropertyGeneratorContext';
 class MemberDeclaration {
 	public node: ts.Declaration;
 	public source: ts.SourceFile;
+	public hasImplementation: boolean;
 
 	constructor(node: ts.Declaration, source: ts.SourceFile) {
 		this.node = node;
 		this.source = source;
+		this.hasImplementation = (node.kind == ts.SyntaxKind.MethodDeclaration) || (node.kind == ts.SyntaxKind.PropertyDeclaration);
 	}
 }
 
@@ -66,13 +68,13 @@ class CodeGenerator {
 			});
 
 		this._allProperties = this._context.walker.getAllNodesOfType<ts.PropertySignature>(classContext.declaration.sourceFile, ts.SyntaxKind.PropertySignature, null, classContext.declaration.node)
-			.map((property: ts.MethodSignature) => {
+			.map((property: ts.PropertySignature) => {
 				return new MemberDeclaration(property, classContext.declaration.sourceFile);
 			});
 
 		if (classContext.parents) {
 			classContext.parents.forEach((declarationContext: Declaration) => {
-				let members = this._context.walker.getAllNodesOfType<ts.PropertySignature>(declarationContext.sourceFile, ts.SyntaxKind.MethodSignature, null, declarationContext.node)
+				let members = this._context.walker.getAllNodesOfType<ts.MethodSignature>(declarationContext.sourceFile, ts.SyntaxKind.MethodSignature, null, declarationContext.node)
 					.map((property: ts.MethodSignature) => {
 						return new MemberDeclaration(property, declarationContext.sourceFile);
 					});
@@ -82,7 +84,7 @@ class CodeGenerator {
 
 			classContext.parents.forEach((declarationContext: Declaration) => {
 				let properties = this._context.walker.getAllNodesOfType<ts.PropertySignature>(declarationContext.sourceFile, ts.SyntaxKind.PropertySignature, null, declarationContext.node)
-					.map((property: ts.MethodSignature) => {
+					.map((property: ts.PropertySignature) => {
 						return new MemberDeclaration(property, declarationContext.sourceFile);
 					});
 
@@ -147,12 +149,18 @@ class CodeGenerator {
 		return descriptions;
 	}
 
+	/**
+	 * Init the code generator
+	 * 
+	 * @static
+	 * @returns {CodeGenerator}
+	 */
 	public static init(): CodeGenerator {
 		let position = vscode.window.activeTextEditor.selection.active;
 		let currentDocument = vscode.window.activeTextEditor.document;
 		let offset = currentDocument.offsetAt(position);
 
-		let context = GeneratorContextProvider.createGeneratorContext(currentDocument.getText(), currentDocument.uri.fsPath, offset);
+		let context = GeneratorContextProvider.createGeneratorContext(currentDocument.getText(), currentDocument.uri.fsPath, offset)
 		if (!context) {
 			return null;
 		}

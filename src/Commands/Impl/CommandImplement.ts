@@ -30,7 +30,7 @@ class CommandImplement implements ICommand {
 	}
 
 	public execute(): Thenable<void> {
-		let generator = CodeGenerator.init();
+		let generator = CodeGenerator.init()
 		if (!generator) {
 			return;
 		}
@@ -91,7 +91,6 @@ class CommandImplement implements ICommand {
 					return;
 				});
 			});
-
 	}
 
 }
