@@ -64,8 +64,8 @@ export class SymbolProvider implements vscode.Disposable {
 		}
 
 		//
-		this._configPath = path.join(vscode.workspace.rootPath, '.tstools');
-		this._dictionaryPath = path.join(this._configPath, '.symbols.json');
+		this._configPath = path.join(vscode.workspace.rootPath, '.vscode');
+		this._dictionaryPath = path.join(this._configPath, 'symbols.json');
 
 		// Add this to the context
 		context.subscriptions.push(this);
