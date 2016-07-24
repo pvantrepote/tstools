@@ -1,72 +1,72 @@
 {
-  "name": "tstools",
-  "displayName": "TsTools",
-  "description": "TypeScript tools. Automatic interface and property implementation.",
-  "version": "1.0.2",
-  "publisher": "iBotMedia",
-  "icon": "images/icon.png",
-  "engines": {
-    "vscode": "^1.1.0"
-  },
-  "author": {
-    "name": "iBotMedia"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/pvantrepote/tstools"
-  },
-  "categories": [
-    "Other",
-    "Snippets"
-  ],
-  "keywords": [
-    "typescript",
-    "implementation",
-    "implement",
-    "interface",
-    "property"
-  ],
-  "activationEvents": [
-    "*"
-  ],
-  "main": "./out/src/extension",
-  "contributes": {
-    "commands": [
-      {
-        "command": "extension.implement",
-        "title": "Implement"
-      },
-      {
-        "command": "extension.import",
-        "title": "Import"
-      }
+    "name": "tstools",
+    "displayName": "TsTools",
+    "description": "TypeScript tools. Automatic interface and property implementation.",
+    "version": "1.1.0",
+    "publisher": "iBotMedia",
+    "icon": "images/icon.png",
+    "engines": {
+        "vscode": "^1.1.0"
+    },
+    "author": {
+        "name": "iBotMedia"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/pvantrepote/tstools"
+    },
+    "categories": [
+        "Other",
+        "Snippets"
     ],
-    "keybindings": [
-      {
-        "command": "extension.implement",
-        "key": "ctrl+shift+I",
-        "mac": "cmd+shift+I",
-        "when": "editorTextFocus"
-      },
-      {
-        "command": "extension.import",
-        "key": "ctrl+shift+M",
-        "mac": "cmd+shift+M",
-        "when": "editorTextFocus"
-      }
-    ]
-  },
-  "scripts": {
-    "vscode:prepublish": "node ./node_modules/vscode/bin/compile",
-    "compile": "node ./node_modules/vscode/bin/compile -watch -p ./",
-    "postinstall": "node ./node_modules/vscode/bin/install"
-  },
-  "dependencies": {
-    "typescript": "^1.8.5",
-    "vscode": "^0.11.0"
-  },
-  "devDependencies": {
-    "typescript": "^1.8.5",
-    "vscode": "^0.11.0"
-  }
+    "keywords": [
+        "typescript",
+        "import",
+        "implement",
+        "interface",
+        "property"
+    ],
+    "activationEvents": [
+        "*"
+    ],
+    "main": "./out/src/extension",
+    "contributes": {
+        "commands": [
+            {
+                "command": "extension.implement",
+                "title": "Implement"
+            },
+            {
+                "command": "extension.import",
+                "title": "Import"
+            }
+        ],
+        "keybindings": [
+            {
+                "command": "extension.implement",
+                "key": "ctrl+shift+I",
+                "mac": "cmd+shift+I",
+                "when": "editorTextFocus"
+            },
+            {
+                "command": "extension.import",
+                "key": "ctrl+shift+M",
+                "mac": "cmd+shift+M",
+                "when": "editorTextFocus"
+            }
+        ]
+    },
+    "scripts": {
+        "vscode:prepublish": "node ./node_modules/vscode/bin/compile",
+        "compile": "node ./node_modules/vscode/bin/compile -watch -p ./",
+        "postinstall": "node ./node_modules/vscode/bin/install"
+    },
+    "dependencies": {
+        "typescript": "^1.8.5",
+        "vscode": "^0.11.0"
+    },
+    "devDependencies": {
+        "typescript": "^1.8.5",
+        "vscode": "^0.11.0"
+    }
 }

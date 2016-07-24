@@ -4,22 +4,22 @@ Set of TypeScript tools for Visual Studio Code.
 
 ## IDE Feature
 
+* `Implement` Implement interfaces
+
 ![IDE](http://i.giphy.com/l46Cugpupotvp3S9y.gif)
 
+* `Implement` Implement properties
+
 ![IDE](http://i.giphy.com/26gLwUcGn8uMT2eNa.gif)
+
+* `Import` Import dependencies
+
+
+![IDE](http://i.giphy.com/3oEjI72lXk5Wca5jIk.gif)
 
 ## Using
 
 First, you will need to install Visual Studio Code. In the command palette (`cmd-shift-p`) select `Install Extension` and choose `TsTools`.  
-
-## Commands
-
-* `Implement` Implement interfaces or properties
-* `Import` Import dependencies
-
-## Known Issues
-
-Implement interface works only for explicit interface import (import { MyInterface } from '...')
 
 ## Release Notes
 
@@ -39,7 +39,7 @@ Implement interface works only for explicit interface import (import { MyInterfa
 
 ### 1.1.0
 
-* Adding support for namespace
+* Adding support for namespace (Fix for issue #1)
 * Adding import
 
 ## License
