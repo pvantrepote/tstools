@@ -46,5 +46,9 @@ First, you will need to install Visual Studio Code. In the command palette (`cmd
 * Fix issue during file change/delete notification
 * Better handling of import * as ....
 
+### 1.1.2
+
+* Fix issue #2. Use user preferences for inserting spaces or tabs
+
 ## License
 [MIT](LICENSE)
