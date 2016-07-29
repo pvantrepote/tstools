@@ -7,18 +7,18 @@ import { InterfaceGeneratorContext } from '../Contexts/InterfaceGeneratorContext
 class PropertyGenerator {
 
 	private static PropertyTpl = "{0}\
-	private _{1}: {2};{0}\
-	public get {1}(): {2} {{0}\
+    private _{1}: {2};{0}\
+    public get {1}(): {2} {{0}\
         return this._{1};{0}\
-	};{0}\
+    };{0}\
    	public set {1}(value: {2}) {{0}\
         this._{1} = value;{0}\
     };{0}";
 
 	private static PropertyBodyTpl = "{0}\
-	public get {1}(): {2} {{0}\
+    public get {1}(): {2} {{0}\
         return this._{1};{0}\
-	};{0}\
+    };{0}\
    	public set {1}(value: {2}) {{0}\
         this._{1} = value;{0}\
     };";

@@ -6,9 +6,9 @@ import { InterfaceGeneratorContext } from '../Contexts/InterfaceGeneratorContext
 class MethodGenerator {
 
 	private static MethodTpl = "{0}\
-	public {1}({2}): {3} {{0}\
-		throw 'Not Implemented';{0}\
-	}{0}";
+    public {1}({2}): {3} {{0}\
+        throw 'Not Implemented';{0}\
+    }{0}";
 
 	public static Generate(methodDecl: ts.SignatureDeclaration, source: ts.SourceFile, context: InterfaceGeneratorContext): string {
 		let name = context.walker.getTextForNode(methodDecl);
