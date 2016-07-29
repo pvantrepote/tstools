@@ -24,46 +24,37 @@ export class GeneratorContextProvider {
 
 		// Get the symbol from the provider
 		let symbol = walker.resolveSymbolForNode(documentSourceFile, nodeAtOffset);
-		if (!symbol) {
-			console.error("No symbol found.");
+		if (!symbol || symbol.refOrImport) {
+			console.error("No symbol found or already imported.");
 			return;
 		}
 
-		//
+		// Is it the same file?
 		let documentModulePath = './' + (path.parse(documentPath).name);
-
-		// Get the module name
-		let moduleName = symbol.moduleName;
 		let filepath = path.join(vscode.workspace.rootPath, symbol.relativePath);
 		let moduleDirectory = './' + path.relative(sourceFolder, filepath);
-		let importPosition: number = 0;
-		let importNode: ts.ImportDeclaration;
-
-		// Is it declared in the same file?
 		if (moduleDirectory == documentModulePath) {
 			return null;
 		}
 
+		// Part of namespace
 		if (symbol.hasNamespace) {
 			moduleDirectory = moduleDirectory + ".ts";
 
-			let foundRef = documentSourceFile.referencedFiles.find((ref: ts.FileReference) => {
-				return (ref.fileName == moduleDirectory);
-			});
-
-			// Already ref, just return null
-			if (foundRef) {
-				return null;
-			}
+			return new ImportGeneratorContext(symbol.hasNamespace, 0, documentSourceFile, symbol.symbol, symbol.moduleName, moduleDirectory, walker);
 		}
-		else {
+
+		let importPosition: number = 0;
+		let importNode: ts.ImportDeclaration;
+
+		if (!symbol.refOrImport) {
 			// Lookup if we already have an import for this module
 			let nodes = walker.getAllNodesOfType<ts.ImportDeclaration>(documentSourceFile, ts.SyntaxKind.ImportDeclaration, (node: ts.ImportDeclaration): boolean => {
 				importPosition = node.end;
 
 				if (node.moduleSpecifier) {
 					let name = walker.getTextForNode(node.moduleSpecifier);
-					return name.endsWith(moduleName);
+					return name.endsWith(symbol.moduleName);
 				}
 
 				return false;
@@ -71,26 +62,36 @@ export class GeneratorContextProvider {
 
 			if (nodes && nodes.length) {
 				importNode = nodes[0];
+			}
+		}
+		else {
+			importNode = symbol.refOrImport as ts.ImportDeclaration;
+		}
 
-				// Verify if it was not already declared
-				if (importNode.importClause.namedBindings) {
-					let decl = walker.getAllNodesOfType<ts.ImportSpecifier>(documentSourceFile, ts.SyntaxKind.ImportSpecifier, (node: ts.ImportSpecifier): boolean => {
-						if (walker.getTextForNode(node) == symbol.symbol) {
-							return true;
-						}
-						else {
-							importPosition = node.end - importNode.pos;
-						}
-					}, importNode.importClause.namedBindings);
+		if (importNode) {
 
-					if (decl && decl.length) {
-						return null;
+			if (importNode.importClause.namedBindings) {
+				if (importNode.importClause.namedBindings.kind == ts.SyntaxKind.NamespaceImport) {
+					return null;
+				}
+				
+				let decl = walker.getAllNodesOfType<ts.ImportSpecifier>(documentSourceFile, ts.SyntaxKind.ImportSpecifier, (node: ts.ImportSpecifier): boolean => {
+					if (walker.getTextForNode(node) == symbol.symbol) {
+						return true;
 					}
+					else {
+						importPosition = node.end - importNode.pos;
+					}
+				}, importNode.importClause.namedBindings);
+
+				if (decl && decl.length) {
+					return null;
 				}
 			}
 		}
 
-		return new ImportGeneratorContext(symbol.hasNamespace, importPosition, documentSourceFile, symbol.symbol, moduleName, moduleDirectory, importNode, walker);
+		return new ImportGeneratorContext(symbol.hasNamespace, importPosition, documentSourceFile, symbol.symbol, symbol.moduleName, moduleDirectory, walker, importNode);
+
 	}
 
 	// Resolve the type under the cursor
@@ -110,18 +111,10 @@ export class GeneratorContextProvider {
 		}
 
 		if (declaringElement.kind == ts.SyntaxKind.PropertyDeclaration) {
-			return this.createPropertyContext(sourceFile, nodeAtOffset, declaringElement as ts.PropertyDeclaration, walker);
+			return new PropertyGeneratorContext(sourceFile, declaringElement as ts.PropertyDeclaration, new Declaration(sourceFile, declaringElement as ts.PropertyDeclaration), walker);
 		}
 
-		return this.createInterfaceContext(sourceFile, nodeAtOffset, declaringElement as ts.ClassDeclaration, walker);
-	};
-
-	private static createPropertyContext(sourceFile: ts.SourceFile, nodeAtOffset: ts.Node, declaringProperty: ts.PropertyDeclaration, walker: TreeWalker): PropertyGeneratorContext {
-		return new PropertyGeneratorContext(sourceFile, declaringProperty, new Declaration(sourceFile, declaringProperty), walker);
-	}
-
-	private static createInterfaceContext(sourceFile: ts.SourceFile, nodeAtOffset: ts.Node, declaringClass: ts.ClassDeclaration, walker: TreeWalker): InterfaceGeneratorContext {
-		//
+		// Lookup for the symbol
 		let symbol = walker.resolveSymbolForNode(sourceFile, nodeAtOffset);
 		if (!symbol) {
 			return null;
@@ -139,7 +132,7 @@ export class GeneratorContextProvider {
 		}
 
 		// Init the context
-		return new InterfaceGeneratorContext(sourceFile, declaringClass, new Declaration(symbolSourceFile, typeDeclaration), walker);
+		return new InterfaceGeneratorContext(sourceFile, declaringElement as ts.ClassDeclaration, new Declaration(symbolSourceFile, typeDeclaration), walker);
 	}
 
 }

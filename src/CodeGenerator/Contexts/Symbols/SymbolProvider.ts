@@ -260,9 +260,13 @@ export class SymbolProvider implements vscode.Disposable {
 				if (this._dictionary.files[relativePath] != dateStr) {
 					this._dictionary.files[relativePath] = dateStr;
 
+					// 
+					let extension = path.parse(relativePath).ext;
+					let symbolPath = relativePath.substr(0, relativePath.length - extension.length);
+					
 					// Remove all elements from the processing file
 					for (let key in this._dictionary.symbols) {
-						if (this._dictionary.symbols[key].relativePath == relativePath) {
+						if (this._dictionary.symbols[key].relativePath == symbolPath) {
 							delete this._dictionary.symbols[key];
 						}
 					}

@@ -17,8 +17,9 @@ interface TSConfig {
 
 export class ResolvedSymbol extends Symbol {
 	symbol: string;
+	refOrImport: ts.ImportDeclaration | ts.FileReference;
 
-	constructor(value: string, symbol: Symbol) {
+	constructor(value: string, symbol: Symbol, refOrImport?: ts.ImportDeclaration | ts.FileReference) {
 		super();
 
 		this.hasNamespace = symbol.hasNamespace;
@@ -26,6 +27,7 @@ export class ResolvedSymbol extends Symbol {
 		this.relativePath = symbol.relativePath;
 		this.symbol = value;
 		this.type = symbol.type;
+		this.refOrImport = refOrImport;
 	}
 }
 
@@ -96,9 +98,15 @@ export class TreeWalker {
 		ts.forEachChild(node, (child: ts.Node) => {
 			return callback(child);
 		});
-
 	}
 
+	/**
+	 * Find the node for the given symbol
+	 * 
+	 * @param {ts.SourceFile} sourceFile The source file that contains the node
+	 * @param {ResolvedSymbol} symbol The symbol 
+	 * @returns {ts.Node}
+	 */
 	public getNodeForSymbol(sourceFile: ts.SourceFile, symbol: ResolvedSymbol): ts.Node {
 		let currentNode: ts.Node = sourceFile;
 		let symbolValue = symbol.symbol;
@@ -126,6 +134,12 @@ export class TreeWalker {
 		return foundNode;
 	}
 
+	/**
+	 * Resolve symbol for a given string 
+	 * 
+	 * @param {string} symbolStr The symbol to resolve
+	 * @returns {ResolvedSymbol}
+	 */
 	public resolveSymbol(symbolStr: string): ResolvedSymbol {
 
 		let symbol = SymbolProvider.Instance.lookupSymbolSync(symbolStr);
@@ -135,7 +149,6 @@ export class TreeWalker {
 
 		return new ResolvedSymbol(symbolStr, symbol);
 	}
-
 
 	/**
 	 * Resolve symbol for a specified node
@@ -148,7 +161,8 @@ export class TreeWalker {
 
 		let toResolve: string;
 
-		let expression = this.getParentNodeOfKind<ts.ExpressionWithTypeArguments | ts.TypeReferenceNode>(sourceFile, node, [ts.SyntaxKind.ExpressionWithTypeArguments, ts.SyntaxKind.TypeReference]);
+		// Get the expression for the node
+		let expression = this.getParentNodeOfKind<ts.ExpressionWithTypeArguments | ts.TypeReferenceNode | ts.PropertyAccessExpression>(sourceFile, node, [ts.SyntaxKind.ExpressionWithTypeArguments, ts.SyntaxKind.TypeReference, ts.SyntaxKind.PropertyAccessExpression]);
 		if (!expression) {
 			toResolve = this.getTextForNode(node);
 		}
@@ -156,17 +170,39 @@ export class TreeWalker {
 			toResolve = this.getTextForNode(expression);
 		}
 
-		// Get the value of the expression
+		// Anything to resolve?
 		if (!toResolve) {
 			return null;
 		}
 
+		// Ok, now lookup 
 		let symbol = SymbolProvider.Instance.lookupSymbolSync(toResolve);
+
+		//
+		if (symbol && symbol.hasNamespace) {
+			let parsedPath = path.parse(sourceFile.fileName);
+			let filepath = path.join(vscode.workspace.rootPath, symbol.relativePath);
+			let moduleDirectory = './' + path.relative(parsedPath.dir, filepath);
+
+			let foundRef = sourceFile.referencedFiles.find((ref: ts.FileReference) => {
+				return (ref.fileName == moduleDirectory);
+			});
+
+			return new ResolvedSymbol(toResolve, symbol, foundRef);
+		}
+
+		// Lookup for the import
+		let importDeclaration = this.getImportForType(sourceFile, toResolve);
+		if (!symbol && importDeclaration) {
+			toResolve = importDeclaration.type;
+			symbol = SymbolProvider.Instance.lookupSymbolSync(toResolve);
+		}
+
 		if (!symbol) {
 			return null;
 		}
 
-		return new ResolvedSymbol(toResolve, symbol);
+		return new ResolvedSymbol(toResolve, symbol, (importDeclaration) ? importDeclaration.importDeclaration : undefined);
 	}
 
 	public getSourceFileForSymbol(symbol: Symbol) {
@@ -235,50 +271,10 @@ export class TreeWalker {
 	 * 
 	 * @param {ts.SourceFile} sourceFile The source file
 	 * @param {ts.Node} node The node
-	 * @param {ts.Node} [currentNode]
-	 * @param {() => ts.Node} [lookupParent]
 	 * @returns {ts.Declaration} Return the declaration node or null if not found
 	 */
-	public findDeclarationForNode(sourceFile: ts.SourceFile, node: ts.Node, currentNode?: ts.Node, lookupParent?: () => ts.Node): ts.Declaration {
+	public findDeclarationForNode(sourceFile: ts.SourceFile, node: ts.Node): ts.Declaration {
 		return this.getParentNodeOfKind<ts.Declaration>(sourceFile, node, [ts.SyntaxKind.PropertyDeclaration, ts.SyntaxKind.ClassDeclaration, ts.SyntaxKind.InterfaceDeclaration]);
-	}
-
-	/**
-	 * Resolve type
-	 * 
-	 * @param {ts.SourceFile} sourceFile sourceFile The source file tree
-	 * @param {string} type The type we are trying to resolve 
-	 * @returns {ts.SourceFile} Return the source file that contains the type or null if not found.
-	 */
-	public resolveType(sourceFile: ts.SourceFile, type: string): ts.SourceFile {
-
-		// Get all imports
-		let foundImport = this.getAllNodesOfType<ts.ImportDeclaration>(sourceFile, ts.SyntaxKind.ImportDeclaration, (importDeclaration: ts.ImportDeclaration) => {
-			let specifiers = this.getAllNodesOfType<ts.ImportSpecifier>(sourceFile, ts.SyntaxKind.ImportSpecifier, (specifier: ts.ImportSpecifier) => {
-				let name = this.getTextForNode(specifier);
-				return (name == type);
-			}, importDeclaration);
-
-			return (specifiers.length > 0);
-		});
-
-		// For now we support only explicit specifier 
-		if (!foundImport || !foundImport.length) {
-			console.warn("Import not found for type '%s'.", type);
-			return null;
-		}
-
-		// Resolve the module
-		let importDeclaration = foundImport[0];
-		let moduleName = this.getTextForNode(importDeclaration.moduleSpecifier);
-
-		let resolvedModule = ts.resolveModuleName(moduleName, sourceFile.fileName, this._options, this._host);
-		if (!resolvedModule || !resolvedModule.resolvedModule) {
-			console.warn("Module '%s' not found.", moduleName);
-			return null;
-		}
-
-		return this.getSourceFile(resolvedModule.resolvedModule.resolvedFileName);
 	}
 
 	public getModuleBlock(module: ts.ModuleDeclaration): ts.ModuleBlock {
@@ -489,6 +485,51 @@ export class TreeWalker {
 
 		if (node["text"]) {
 			return node["text"];
+		}
+
+		return null;
+	}
+
+	private getImportForType(sourceFile: ts.SourceFile, type: string): { importDeclaration: ts.ImportDeclaration, type: string } {
+
+		// Get all imports
+		let foundImport = this.getAllNodesOfType<ts.ImportDeclaration>(sourceFile, ts.SyntaxKind.ImportDeclaration, (importDeclaration: ts.ImportDeclaration) => {
+			let importClause = importDeclaration.importClause;
+			if (!importClause || !importClause.namedBindings) {
+				return false;
+			}
+
+			if (importClause.namedBindings.kind == ts.SyntaxKind.NamedImports) {
+				let namedImports = importClause.namedBindings as ts.NamedImports;
+
+				let specifier = ts.forEachChild<ts.ImportSpecifier>(namedImports, (child: ts.ImportSpecifier) => {
+					let name = this.getTextForNode(child);
+					return (name == type) ? child : undefined;
+				});
+
+				return (specifier != undefined);
+			}
+
+			let nameSpaceImports = importClause.namedBindings as ts.NamespaceImport;
+			let name = this.getTextForNode(nameSpaceImports);
+			if (type.startsWith(name)) {
+				if (type.length == name.length) {
+					return true;
+				}
+				else if (type.charAt(name.length) == '.') {
+					type = type.substr(name.length + 1);
+					return true;
+				}
+			}
+
+			return false;
+		});
+
+		if (foundImport.length) {
+			return {
+				importDeclaration: foundImport[0],
+				type: type
+			};
 		}
 
 		return null;

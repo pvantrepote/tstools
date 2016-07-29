@@ -14,7 +14,6 @@ Set of TypeScript tools for Visual Studio Code.
 
 * `Import` Import dependencies
 
-
 ![IDE](http://i.giphy.com/3oEjI72lXk5Wca5jIk.gif)
 
 ## Using
@@ -41,6 +40,11 @@ First, you will need to install Visual Studio Code. In the command palette (`cmd
 
 * Adding support for namespace (Fix for issue #1)
 * Adding import
+
+### 1.1.1
+
+* Fix issue during file change/delete notification
+* Better handling of import * as ....
 
 ## License
 [MIT](LICENSE)

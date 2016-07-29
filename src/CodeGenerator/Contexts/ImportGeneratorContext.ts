@@ -10,7 +10,7 @@ export class ImportGeneratorContext extends CodeGeneratorContext<ts.ImportDeclar
 	public isReferenceType: boolean;
 	private insertAtPosition: number;
 
-	constructor(isReferenceType: boolean, insertAtPosition: number, sourceFile: ts.SourceFile, nodeToResolve: string, moduleName: string, moduleDirectory: string, importNode: ts.ImportDeclaration, walker: TreeWalker) {
+	constructor(isReferenceType: boolean, insertAtPosition: number, sourceFile: ts.SourceFile, nodeToResolve: string, moduleName: string, moduleDirectory: string, walker: TreeWalker, importNode?: ts.ImportDeclaration) {
 		super(sourceFile, importNode, null, walker);
 		this.moduleName = moduleName;
 		this.moduleDirectory = moduleDirectory;
