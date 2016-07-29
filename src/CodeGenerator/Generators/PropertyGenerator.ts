@@ -7,34 +7,34 @@ import { InterfaceGeneratorContext } from '../Contexts/InterfaceGeneratorContext
 class PropertyGenerator {
 
 	private static PropertyTpl = "{0}\
-	private _{1}: {2};{0}\
-	public get {1}(): {2} {{0}\
-        return this._{1};{0}\
-	};{0}\
-   	public set {1}(value: {2}) {{0}\
-        this._{1} = value;{0}\
-    };{0}";
+{3}private _{1}: {2};{0}\
+{3}public get {1}(): {2} {{0}\
+{3}{3}return this._{1};{0}\
+{3}};{0}\
+{3}public set {1}(value: {2}) {{0}\
+{3}{3}this._{1} = value;{0}\
+{3}};{0}";
 
 	private static PropertyBodyTpl = "{0}\
-	public get {1}(): {2} {{0}\
-        return this._{1};{0}\
-	};{0}\
-   	public set {1}(value: {2}) {{0}\
-        this._{1} = value;{0}\
-    };";
+{3}public get {1}(): {2} {{0}\
+{3}{3}return this._{1};{0}\
+{3}};{0}\
+{3}public set {1}(value: {2}) {{0}\
+{3}{3}this._{1} = value;{0}\
+{3}};";
 
 	public static Generate(propertySig: ts.PropertySignature, source: ts.SourceFile, context: InterfaceGeneratorContext): string {
 		let typeString = source.getFullText().substring(propertySig.type.pos, propertySig.type.end).trim();
 		let name = context.walker.getTextForNode(propertySig);
 
-		return StringHelpers.format(this.PropertyTpl, context.newLine, name, typeString);
+		return StringHelpers.format(this.PropertyTpl, context.newLine, name, typeString, context.space);
 	}
 
 	public static GenerateForDeclaration(propertyDecl: ts.PropertyDeclaration, source: ts.SourceFile, context: InterfaceGeneratorContext): string {
 		let typeString = source.getFullText().substring(propertyDecl.type.pos, propertyDecl.type.end).trim();
 		let name = context.walker.getTextForNode(propertyDecl);
 
-		return StringHelpers.format(this.PropertyTpl, context.newLine, name, typeString);
+		return StringHelpers.format(this.PropertyTpl, context.newLine, name, typeString, context.space);
 	}
 
 	public static GenerateForDeclarationInClass(propertyDecl: ts.PropertyDeclaration, source: ts.SourceFile, context: PropertyGeneratorContext, document: vscode.TextDocument, editor: vscode.TextEditorEdit): string {
@@ -63,7 +63,7 @@ class PropertyGenerator {
 
 		let typeString = source.getFullText().substring(propertyDecl.type.pos, propertyDecl.type.end).trim();
 
-		return StringHelpers.format(this.PropertyBodyTpl, context.newLine, name, typeString);
+		return StringHelpers.format(this.PropertyBodyTpl, context.newLine, name, typeString, context.space);
 	}
 
 }
