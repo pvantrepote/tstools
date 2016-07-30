@@ -22,7 +22,7 @@ export class SymbolProvider implements vscode.Disposable {
 	private _dictionaryPath: string;
 	private _initialized: boolean = false;
 
-	private _walker: TreeWalker = new TreeWalker(false);
+	private _walker: TreeWalker;
 
 	// private _regex = /(?!.*)?(interface|class|namespace){1}\s*([A-Za-z0-9])*/g;
 	// private _splitRegEx = /(^(interface|class|namespace))|(([A-Za-z0-9])*$)/g;
@@ -59,11 +59,12 @@ export class SymbolProvider implements vscode.Disposable {
 	 * @returns {Promise<SymbolProvider>}
 	 */
 	public init(context: vscode.ExtensionContext): Promise<SymbolProvider> {
-		if (this._initialized) {
+		if (this._initialized || !vscode.workspace.rootPath) {
 			return Promise.resolve(this);
 		}
 
 		//
+		this._walker = new TreeWalker(false);
 		this._configPath = path.join(vscode.workspace.rootPath, '.vscode');
 		this._dictionaryPath = path.join(this._configPath, 'symbols.json');
 
