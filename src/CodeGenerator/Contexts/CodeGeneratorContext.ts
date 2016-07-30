@@ -5,6 +5,7 @@ import { Declaration } from './Declaration';
 
 interface IEditor extends vscode.WorkspaceConfiguration {
 	insertSpaces: boolean;
+	tabSize: number;
 }
 
 export abstract class CodeGeneratorContext<T extends ts.Node> {
@@ -31,7 +32,13 @@ export abstract class CodeGeneratorContext<T extends ts.Node> {
 		// Fix issue #2
 		let editor = vscode.workspace.getConfiguration('editor') as IEditor;
 		if (editor && editor.insertSpaces) {
-			this.space = ' ';
+			// Handle tab size
+			if (editor.tabSize) {
+				this.space = (new Array(editor.tabSize + 1)).join(' ');
+			}
+			else {
+				this.space = ' ';
+			}
 		}
 		else {
 			this.space = '\t';
