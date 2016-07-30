@@ -50,5 +50,10 @@ First, you will need to install Visual Studio Code. In the command palette (`cmd
 
 * Fix issue #2. Use user preferences for inserting spaces or tabs
 
+### 1.1.3
+
+* Fix issue #4. Fix undefined rootPath using vscode-insider
+* Use tabSize editor property when using spaces instead of tabs.
+
 ## License
 [MIT](LICENSE)
