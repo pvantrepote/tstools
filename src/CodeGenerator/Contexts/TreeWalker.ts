@@ -100,8 +100,14 @@ export class TreeWalker {
 		return this._host.getNewLine();
 	}
 
-	public walk(node: ts.Node, callback: (node: ts.Node) => any) {
-		ts.forEachChild(node, (child: ts.Node) => {
+	/**
+	 * Iterate through the tree 
+	 * 
+	 * @param {ts.Node} node the root node
+	 * @param {(node: ts.Node) => any} callback
+	 */
+	public walk(rootNode: ts.Node, callback: (node: ts.Node) => any) {
+		ts.forEachChild(rootNode, (child: ts.Node) => {
 			return callback(child);
 		});
 	}
@@ -181,67 +187,29 @@ export class TreeWalker {
 			return null;
 		}
 
-		// Ok, now lookup 
-		let symbol = SymbolProvider.Instance.lookupSymbolSync(toResolve);
+		// Find the symbol
+		let symbol = this.findSymbol(sourceFile, toResolve);
+		if (!symbol && expression && (node != expression)) {
+			// No symbol found using the expression, try with the given node.
+			toResolve = this.getTextForNode(node);
 
-		//
-		if (symbol && symbol.hasNamespace) {
-			let parsedPath = path.parse(sourceFile.fileName);
-			let filepath = path.join(vscode.workspace.rootPath, symbol.relativePath);
-			let moduleDirectory = './' + path.relative(parsedPath.dir, filepath);
-
-			let foundRef = sourceFile.referencedFiles.find((ref: ts.FileReference) => {
-				return (ref.fileName == moduleDirectory);
-			});
-
-			return new ResolvedSymbol(toResolve, symbol, foundRef);
+			if (!toResolve) {
+				symbol = this.findSymbol(sourceFile, toResolve);
+			}
 		}
 
-		// Lookup for the import
-		let importDeclaration = this.getImportForType(sourceFile, toResolve);
-		if (!symbol && importDeclaration) {
-			toResolve = importDeclaration.type;
-			symbol = SymbolProvider.Instance.lookupSymbolSync(toResolve);
-		}
-
-		if (!symbol) {
-			return null;
-		}
-
-		return new ResolvedSymbol(toResolve, symbol, (importDeclaration) ? importDeclaration.importDeclaration : undefined);
+		return symbol;
 	}
-
-	public getSourceFileForSymbol(symbol: Symbol) {
+	
+	/**
+	 * Get source file for a given symbol
+	 * 
+	 * @param {Symbol} symbol The symbol
+	 * @returns {ts.SourceFile} Return the source file or null if not found
+	 */
+	public getSourceFileForSymbol(symbol: Symbol) : ts.SourceFile {
 		let filepath = path.join(vscode.workspace.rootPath, symbol.relativePath) + ".ts";
 		return this.getSourceFile(filepath);
-	}
-
-	/**
-	 *  Get a parent of specified node of a specific type
-	 * 
-	 * @template T
-	 * @param {ts.SourceFile} sourceFile The source file
-	 * @param {ts.Node} node The node
-	 * @param {ts.SyntaxKind[]} kinds Kinds of nodes we are looking for
-	 * @param {ts.Node} [currentNode]
-	 * @param {() => ts.Node} [lookupParent]
-	 * @returns {T} Return thre first found node or null
-	 */
-	public getParentNodeOfKind<T extends ts.Node>(sourceFile: ts.SourceFile, node: ts.Node, kinds: ts.SyntaxKind[], currentNode?: ts.Node): T {
-
-		if (!currentNode) {
-			currentNode = node;
-		}
-
-		if (currentNode.parent) {
-			if (kinds.indexOf(currentNode.parent.kind) != -1) {
-				return currentNode.parent as T;
-			}
-
-			return this.getParentNodeOfKind<T>(sourceFile, node, kinds, currentNode.parent);
-		}
-
-		return null;
 	}
 
 	/**
@@ -283,6 +251,12 @@ export class TreeWalker {
 		return this.getParentNodeOfKind<ts.Declaration>(sourceFile, node, [ts.SyntaxKind.PropertyDeclaration, ts.SyntaxKind.ClassDeclaration, ts.SyntaxKind.InterfaceDeclaration]);
 	}
 
+	/**
+	 * Return the module block
+	 * 
+	 * @param {ts.ModuleDeclaration} module The module
+	 * @returns {ts.ModuleBlock} The mobulde body or null if not found.
+	 */
 	public getModuleBlock(module: ts.ModuleDeclaration): ts.ModuleBlock {
 		let block = (module as ts.ModuleDeclaration).body;
 		while ((block.kind != ts.SyntaxKind.ModuleBlock) && block) {
@@ -332,86 +306,6 @@ export class TreeWalker {
 		});
 
 		return foundNodes;
-	}
-
-	/**
-	 * Find node matching a specified text
-	 * 
-	 * @template T
-	 * @param {ts.SourceFile} sourceFile The source file to look into
-	 * @param {string} text The text to look for
-	 * @param {ts.SyntaxKind} [king] The kind of node we are looking for
-	 * @param {ts.Node} [currentNode] The current node
-	 * @returns {ts.Node} Return the found node or null if not found.
-	 */
-	public findNodeWithText<T extends ts.Node>(sourceFile: ts.SourceFile, text: string, kind?: ts.SyntaxKind | ts.SyntaxKind[], currentNode?: ts.Node): T {
-
-		let elements = text.split('.');
-		if (elements.length > 1) {
-			// Namepace included, lookup for it first
-
-		}
-
-		if (!currentNode) {
-			currentNode = sourceFile;
-		}
-		else {
-			let kindMatching: boolean = true;
-			if (kind) {
-				if (kind["length"]) {
-					kindMatching = ((kind as ts.SyntaxKind[]).indexOf(currentNode.kind) != -1);
-				}
-				else {
-					kindMatching = (currentNode.kind == kind);
-				}
-			}
-
-			let nodeName = this.getTextForNode(currentNode);
-			if (kindMatching && nodeName && (nodeName == text)) {
-				return currentNode as T;
-			}
-		}
-
-		let foundNode: ts.Node = ts.forEachChild(currentNode, (child: ts.Node) => {
-			return this.findNodeWithText(sourceFile, text, kind, child);
-		});
-
-		return foundNode as T;
-	}
-
-	/**
-	 * Get node at a specified offset
-	 * 
-	 * @template T
-	 * @param {ts.SourceFile} sourceFile The source file to look into
-	 * @param {number} offset The offset of the node we are looking for
-	 * @param {ts.Node} [currentNode]
-	 * @returns {T} The the node or null if not found
-	 */
-	public getNodeAtOffsetOfKinds<T extends ts.Node>(sourceFile: ts.SourceFile, offset: number, kinds: Array<ts.SyntaxKind>, currentNode?: ts.Node): T {
-
-		if (!currentNode) {
-			currentNode = sourceFile;
-		}
-
-		// Get all children
-		if ((currentNode.pos > offset) || (currentNode.end < offset)) {
-			return null;
-		}
-
-		if (kinds.indexOf(currentNode.kind) != -1) {
-			return currentNode as T;
-		}
-
-		let foundNode = ts.forEachChild(currentNode, (child: ts.Node) => {
-			return this.getNodeAtOffset(sourceFile, offset, child);
-		});
-
-		if (!foundNode) {
-			foundNode = currentNode;
-		}
-
-		return foundNode as T;
 	}
 
 	/**
@@ -491,6 +385,74 @@ export class TreeWalker {
 
 		if (node["text"]) {
 			return node["text"];
+		}
+
+		return null;
+	}
+
+	/**
+	 * Find a symbol user in a source file  
+	 * 
+	 * @private
+	 * @param {ts.SourceFile} sourceFile The source file
+	 * @param {string} symbolToFind The symbol to find
+	 * @returns {ResolvedSymbol} Return a ResolvedSymbol or null is not found
+	 */
+	private findSymbol(sourceFile: ts.SourceFile, symbolToFind: string) : ResolvedSymbol {
+		// Ok, now lookup 
+		let symbol = SymbolProvider.Instance.lookupSymbolSync(symbolToFind);
+
+		//
+		if (symbol && symbol.hasNamespace) {
+			let parsedPath = path.parse(sourceFile.fileName);
+			let filepath = path.join(vscode.workspace.rootPath, symbol.relativePath);
+			let moduleDirectory = './' + path.relative(parsedPath.dir, filepath);
+
+			let foundRef = sourceFile.referencedFiles.find((ref: ts.FileReference) => {
+				return (ref.fileName == moduleDirectory);
+			});
+
+			return new ResolvedSymbol(symbolToFind, symbol, foundRef);
+		}
+
+		// Lookup for the import
+		let importDeclaration = this.getImportForType(sourceFile, symbolToFind);
+		if (!symbol && importDeclaration) {
+			symbolToFind = importDeclaration.type;
+			symbol = SymbolProvider.Instance.lookupSymbolSync(symbolToFind);
+		}
+
+		if (!symbol) {
+			return null;
+		}
+
+		return new ResolvedSymbol(symbolToFind, symbol, (importDeclaration) ? importDeclaration.importDeclaration : undefined);
+	}
+
+	/**
+	 *  Get a parent of specified node of a specific type
+	 * 
+	 * @private
+	 * @template T
+	 * @param {ts.SourceFile} sourceFile The source file
+	 * @param {ts.Node} node The node
+	 * @param {ts.SyntaxKind[]} kinds Kinds of nodes we are looking for
+	 * @param {ts.Node} [currentNode]
+	 * @param {() => ts.Node} [lookupParent]
+	 * @returns {T} Return thre first found node or null
+	 */
+	private getParentNodeOfKind<T extends ts.Node>(sourceFile: ts.SourceFile, node: ts.Node, kinds: ts.SyntaxKind[], currentNode?: ts.Node): T {
+
+		if (!currentNode) {
+			currentNode = node;
+		}
+
+		if (currentNode.parent) {
+			if (kinds.indexOf(currentNode.parent.kind) != -1) {
+				return currentNode.parent as T;
+			}
+
+			return this.getParentNodeOfKind<T>(sourceFile, node, kinds, currentNode.parent);
 		}
 
 		return null;
