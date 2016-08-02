@@ -19,6 +19,6 @@ suite("TreeWalker Tests", () => {
     test("Should return a newline", () => {
 		let walker: TreeWalker = new TreeWalker();
 
-		assert.equal(walker.newLine(), (process.platform == 'windows') ? '\r\n' : '\n');
+		assert.equal(walker.newLine, (process.platform == 'windows') ? '\r\n' : '\n');
     });
 });

@@ -27,7 +27,7 @@ export abstract class CodeGeneratorContext<T extends ts.Node> {
 		this.declaringElements = declaringElements;
 		this.declaration = declaration;
 		this.walker = walker;
-		this.newLine = walker.newLine();
+		this.newLine = walker.newLine;
 
 		// Fix issue #2
 		let editor = vscode.workspace.getConfiguration('editor') as IEditor;

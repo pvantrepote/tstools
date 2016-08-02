@@ -49,6 +49,10 @@ export class TreeWalker {
         this._options = value;
     };
 
+	public get newLine(): string {
+		return this._host.getNewLine();
+	}
+	
 	private _cachedFiles: { [name: string]: ts.SourceFile; } = {}
 	private _cacheEnabled: boolean;
 
@@ -94,10 +98,6 @@ export class TreeWalker {
 
 		this._host = ts.createCompilerHost(this._options, true);
 		this._cacheEnabled = (cacheEnabled && (cacheEnabled == true));
-	}
-
-	public newLine(): string {
-		return this._host.getNewLine();
 	}
 
 	/**
