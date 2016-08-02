@@ -59,31 +59,37 @@ export class TreeWalker {
 		};
 
 		// Load the tsconfig.json
-		let tsPath = path.join(vscode.workspace.rootPath, 'tsconfig.json');
-		if (fs.existsSync(tsPath)) {
-			let tsConfig: TSConfig = null;
+		try {
+			let tsPath = path.join(vscode.workspace.rootPath, 'tsconfig.json');
+			let stats = fs.statSync(tsPath);
+			if (stats) {
+				let tsConfig: TSConfig = null;
 
-			try {
-				tsConfig = require(tsPath) as TSConfig;
-			}
-			catch (error) {
-				console.error(error);
-			}
+				try {
+					tsConfig = require(tsPath) as TSConfig;
+				}
+				catch (error) {
+					console.error(error);
+				}
 
-			if ((tsConfig) && (tsConfig.compilerOptions.target)) {
-				switch (tsConfig.compilerOptions.target) {
-					case 'es6':
-						this._options.target = ts.ScriptTarget.ES6;
-						break;
-					case 'es5':
-						this._options.target = ts.ScriptTarget.ES5;
-						break;
-					default:
-					case 'es3':
-						this._options.target = ts.ScriptTarget.ES3;
-						break;
+				if ((tsConfig) && (tsConfig.compilerOptions.target)) {
+					switch (tsConfig.compilerOptions.target) {
+						case 'es6':
+							this._options.target = ts.ScriptTarget.ES6;
+							break;
+						case 'es5':
+							this._options.target = ts.ScriptTarget.ES5;
+							break;
+						default:
+						case 'es3':
+							this._options.target = ts.ScriptTarget.ES3;
+							break;
+					}
 				}
 			}
+		}
+		catch (error) {
+
 		}
 
 		this._host = ts.createCompilerHost(this._options, true);
@@ -490,6 +496,14 @@ export class TreeWalker {
 		return null;
 	}
 
+	/**
+	 * Lookup import in a given source file for a given type 
+	 * 
+	 * @private
+	 * @param {ts.SourceFile} sourceFile The source file
+	 * @param {string} type The type
+	 * @returns {{ importDeclaration: ts.ImportDeclaration, type: string }}
+	 */
 	private getImportForType(sourceFile: ts.SourceFile, type: string): { importDeclaration: ts.ImportDeclaration, type: string } {
 
 		// Get all imports
