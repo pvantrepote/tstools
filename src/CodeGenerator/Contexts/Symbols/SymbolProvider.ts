@@ -21,6 +21,7 @@ export class SymbolProvider implements vscode.Disposable {
 	private _configPath: string;
 	private _dictionaryPath: string;
 	private _initialized: boolean = false;
+	private _extensionContext: vscode.ExtensionContext;
 
 	private _walker: TreeWalker;
 
@@ -44,6 +45,7 @@ export class SymbolProvider implements vscode.Disposable {
 		this._dictionary = null;
 		this._configPath = null;
 		this._dictionaryPath = null;
+		this._extensionContext = null;
 
 		if (this._watcher) {
 			this._watcher.dispose();
@@ -58,44 +60,39 @@ export class SymbolProvider implements vscode.Disposable {
 	 * 
 	 * @returns {Promise<SymbolProvider>}
 	 */
-	public init(context: vscode.ExtensionContext): Promise<SymbolProvider> {
+	public init(context: vscode.ExtensionContext, forceInit?: boolean): Promise<SymbolProvider> {
 		if (this._initialized || !vscode.workspace.rootPath) {
 			return Promise.resolve(this);
 		}
 
+		if (!this._extensionContext) {
+			this._extensionContext = context;
+
+			// Add this to the context & create all watcher
+			this._extensionContext.subscriptions.push(this);
+
+			this._watcher = vscode.workspace.createFileSystemWatcher("**/*.ts", true, false, false);
+			this._watcher.onDidChange(this.onDidChanged, this);
+			this._watcher.onDidDelete(this.onDidDelete, this);
+		}
+
+		let cfgPath = path.join(vscode.workspace.rootPath, '.vscode');
+
 		//
-		this._walker = new TreeWalker(false);
-		this._configPath = path.join(vscode.workspace.rootPath, '.vscode');
-		this._dictionaryPath = path.join(this._configPath, 'symbols.json');
-
-		// Add this to the context
-		context.subscriptions.push(this);
-
-		// 1st read the JSON
-		return fs.readJSON<SymbolProviderDictionary>(this._dictionaryPath)
-			.then((dictionary: SymbolProviderDictionary) => {
-				this._dictionary = dictionary;
-
-				// Update the dictionary
-				return this.createOrUpdateDictionary();
-			})
-			.catch((error) => {
-				// Got an error
-				console.error(error);
-
-				// re-create the dictionary
-				this._dictionary = new SymbolProviderDictionary();
-				return this.createOrUpdateDictionary();
-			})
-			.then(() => {
-				this._watcher = vscode.workspace.createFileSystemWatcher("**/*.ts", true, false, false);
-
-				this._watcher.onDidChange(this.onDidChanged, this);
-				this._watcher.onDidDelete(this.onDidDelete, this);
-
-				this._initialized = true;
-				return this;
-			});
+		if (forceInit) {
+			return this.doInit(cfgPath);
+		}
+		else {
+			// 
+			return fs.stats(cfgPath)
+				.then((stats: Stats) => {
+					return this.doInit(cfgPath);
+				})
+				.catch((error: any) => {
+					console.error(error);
+					return Promise.resolve(this);
+				});
+		}
 	}
 
 	/**
@@ -115,28 +112,83 @@ export class SymbolProvider implements vscode.Disposable {
 	}
 
 	public onDidChanged(uri: vscode.Uri) {
-		let relativePath = path.relative(vscode.workspace.rootPath, uri.fsPath);
-
-		return this.updateDictionaryEntry(uri.fsPath, relativePath)
+		this.init(this._extensionContext, true)
 			.then(() => {
-				return this.save();
+				// If not initialized, just return
+				if (!this._initialized) {
+					return;
+				}
+
+				let relativePath = path.relative(vscode.workspace.rootPath, uri.fsPath);
+
+				return this.updateDictionaryEntry(uri.fsPath, relativePath)
+					.then(() => {
+						return this.save();
+					})
 			});
 	}
 
 	public onDidDelete(uri: vscode.Uri) {
-		let relativePath = path.relative(vscode.workspace.rootPath, uri.fsPath);
-		if (this._dictionary.files[relativePath]) {
-			delete this._dictionary.files[relativePath];
 
-			// Delete the related symbol
-			for (let key in this._dictionary.symbols) {
-				if (this._dictionary.symbols[key].relativePath == relativePath) {
-					delete this._dictionary.symbols[key];
+		this.init(this._extensionContext)
+			.then(() => {
+				// If not initialized, just return
+				if (!this._initialized) {
+					return;
 				}
-			}
-		}
 
-		return this.save();
+				// Remove everything related to this file
+				let relativePath = path.relative(vscode.workspace.rootPath, uri.fsPath);
+				if (this._dictionary.files[relativePath]) {
+					delete this._dictionary.files[relativePath];
+
+					//
+					let extension = path.parse(relativePath).ext;
+					let symbolPath = relativePath.substr(0, relativePath.length - extension.length);
+
+					// Delete the related symbol
+					for (let key in this._dictionary.symbols) {
+						if (this._dictionary.symbols[key].relativePath == symbolPath) {
+							delete this._dictionary.symbols[key];
+						}
+					}
+				}
+
+				return this.save();
+			})
+
+	}
+
+	private doInit(cfgPath: string): Promise<SymbolProvider> {
+		//
+		let dictionaryPath = path.join(cfgPath, 'symbols.json');
+
+		// 1st read the JSON
+		return fs.readJSON<SymbolProviderDictionary>(dictionaryPath)
+			.then((dictionary: SymbolProviderDictionary) => {
+				this._dictionary = dictionary;
+			})
+			.catch((error) => {
+				// Got an error
+				console.error(error);
+
+				// Create a brand new dictionary
+				this._dictionary = new SymbolProviderDictionary();
+
+				// Create the VSCode folder
+				return fs.mkdir(cfgPath);
+			})
+			.then(() => {
+				this._configPath = cfgPath;
+				this._dictionaryPath = path.join(cfgPath, 'symbols.json');
+				this._walker = new TreeWalker(false);
+
+				return this.createOrUpdateDictionary();
+			})
+			.then(() => {
+				this._initialized = true;
+				return this;
+			});
 	}
 
 	/**
@@ -264,7 +316,7 @@ export class SymbolProvider implements vscode.Disposable {
 					// 
 					let extension = path.parse(relativePath).ext;
 					let symbolPath = relativePath.substr(0, relativePath.length - extension.length);
-					
+
 					// Remove all elements from the processing file
 					for (let key in this._dictionary.symbols) {
 						if (this._dictionary.symbols[key].relativePath == symbolPath) {
