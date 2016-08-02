@@ -4,6 +4,9 @@ os:
   - osx
   - linux
 
+env:
+  - CODE_TESTS_PATH=&quot;$TRAVIS_BUILD_DIR/test&quot;
+
 before_install:
   - if [ $TRAVIS_OS_NAME == "linux" ]; then
       export CXX="g++-4.9" CC="gcc-4.9" DISPLAY=:99.0;
