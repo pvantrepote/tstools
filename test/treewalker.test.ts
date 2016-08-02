@@ -15,10 +15,11 @@ import { TreeWalker } from './../src/CodeGenerator/Contexts/TreeWalker';
 // Defines a Mocha test suite to group tests of similar kind together
 suite("TreeWalker Tests", () => {
 
-    // Defines a Mocha unit test
-    test("Should return a newline", () => {
-		let walker: TreeWalker = new TreeWalker();
+  test("Should return a newline", () => {
+    let walker: TreeWalker = new TreeWalker();
+    assert.equal(walker.newLine, (process.platform == 'windows') ? '\r\n' : '\n');
+  });
 
-		assert.equal(walker.newLine, (process.platform == 'windows') ? '\r\n' : '\n');
-    });
+  
+
 });
