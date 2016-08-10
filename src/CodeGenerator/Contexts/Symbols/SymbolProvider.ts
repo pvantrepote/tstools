@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as ts from 'typescript';
-import { fsts as fs, Stats } from '../../../Tools/fs';
+import { fs } from '../../../Tools/fs';
 import { Symbol, SymbolType } from './Symbol';
 import { TreeWalker } from '../TreeWalker';
 
@@ -85,7 +85,7 @@ export class SymbolProvider implements vscode.Disposable {
 		else {
 			// 
 			return fs.stats(cfgPath)
-				.then((stats: Stats) => {
+				.then((stats: fs.Stats) => {
 					return this.doInit(cfgPath);
 				})
 				.catch((error: any) => {
@@ -120,6 +120,14 @@ export class SymbolProvider implements vscode.Disposable {
 				}
 
 				let relativePath = path.relative(vscode.workspace.rootPath, uri.fsPath);
+
+				// Filter out *.d.ts if we have a matching .ts file
+				if (relativePath.endsWith(".d.ts")) {
+					let toLookUp = relativePath.substr(0, relativePath.length - 5) + ".ts";
+					if (this._dictionary.files[toLookUp]) {
+						return;
+					}
+				}
 
 				return this.updateDictionaryEntry(uri.fsPath, relativePath)
 					.then(() => {
@@ -200,50 +208,73 @@ export class SymbolProvider implements vscode.Disposable {
 	protected createOrUpdateDictionary(): Thenable<SymbolProvider> {
 		let rootPath = vscode.workspace.rootPath;
 
-		// Find all ts files
-		return vscode.workspace.findFiles("**/*.ts", "**/node_modules/**")
-			.then((uris: Array<vscode.Uri>) => {
-				// 
-				let processedFile = new Array<string>();
+		// 
+		let processedFile = new Array<string>();
 
-				// For all files, 
-				return uris.reduce((p: Promise<void>, uri: vscode.Uri) => {
-					return p.then(() => {
-						let relativePath = path.relative(rootPath, uri.fsPath);
-						processedFile.push(relativePath);
+		return this.listFile(rootPath, (filepath: string, stats: fs.Stats) => {
+			let relativePath = path.relative(rootPath, filepath);
+			processedFile.push(relativePath);
 
-						if (this._dictionary.files[relativePath]) {
-							return this.updateDictionaryEntry(uri.fsPath, relativePath);
+			if (this._dictionary.files[relativePath]) {
+				return this.updateDictionaryEntry(filepath, relativePath);
+			}
+			else {
+				return this.addToDictionary(filepath, relativePath);
+			}
+		})
+			.then(() => {
+				// Remove deleted files
+				for (let file in this._dictionary.files) {
+					if (processedFile.indexOf(file) != -1) {
+						continue;
+					}
+
+					// Remoove the file
+					delete this._dictionary[file];
+
+					// Delete the related symbol
+					for (let key in this._dictionary.symbols) {
+						if (this._dictionary.symbols[key].relativePath == file) {
+							delete this._dictionary.symbols[key];
 						}
-						else {
-							return this.addToDictionary(uri.fsPath, relativePath);
-						}
-					});
-				}, Promise.resolve())
-					.then(() => {
-
-						// Remove deleted files
-						for (let file in this._dictionary.files) {
-							if (processedFile.indexOf(file) != -1) {
-								continue;
-							}
-
-							// Remoove the file
-							delete this._dictionary[file];
-
-							// Delete the related symbol
-							for (let key in this._dictionary.symbols) {
-								if (this._dictionary.symbols[key].relativePath == file) {
-									delete this._dictionary.symbols[key];
-								}
-							}
-						}
-
-					});
+					}
+				}
 			})
 			.then(() => {
 				return this.save();
-			})
+			});
+
+	}
+
+	protected listFile(folder: string, fileProcessor: (filepath: string, stats: fs.Stats) => Promise<void>): Promise<void> {
+
+		return fs.readdir(folder)
+			.then((files: fs.Files) => {
+				return Object.keys(files).reduce((p: Promise<void>, key: string) => {
+					return p.then(() => {
+						let stats: fs.Stats = files[key];
+
+						if (stats.isDirectory()) {
+							return this.listFile(path.join(folder, key), fileProcessor)
+						}
+						else if (stats.isFile() && key.endsWith(".ts")) {
+
+							// Filter out *.d.ts if we have a matching .ts file
+							if (key.endsWith(".d.ts")) {
+								let toLookUp = key.substr(0, key.length - 5) + ".ts";
+								if (files[toLookUp]) {
+									return;
+								}
+							}
+
+							return fileProcessor(path.join(folder, key), stats);
+						}
+
+						return;
+					});
+				}, Promise.resolve());
+
+			});
 	}
 
 	protected save(): Promise<SymbolProvider> {
@@ -306,7 +337,7 @@ export class SymbolProvider implements vscode.Disposable {
 
 	protected updateDictionaryEntry(filepath: string, relativePath: string): Promise<void> {
 		return fs.stats(filepath)
-			.then((stats: Stats) => {
+			.then((stats: fs.Stats) => {
 				let dateStr = stats.mtime.toISOString();
 
 				// Somthing Changed?
@@ -336,7 +367,7 @@ export class SymbolProvider implements vscode.Disposable {
 			.then(() => {
 				return fs.stats(filepath);
 			})
-			.then((stats: Stats) => {
+			.then((stats: fs.Stats) => {
 				this._dictionary.files[relativePath] = stats.mtime.toISOString();
 			})
 			.catch((reason) => {

@@ -1,12 +1,13 @@
-import * as fs from 'fs';
+import * as filesys from 'fs';
+import * as path from 'path';
 
-export interface Stats extends fs.Stats {}
+export namespace fs {
+	export interface Stats extends filesys.Stats { }
+	export type Files = { [file: string]: filesys.Stats; }
 
-export class fsts {
-
-	public static readJSON<T>(filename: string): Promise<T> {
+	export function readJSON<T>(filename: string): Promise<T> {
 		return new Promise<T>((resolve, reject) => {
-			fs.readFile(filename, 'UTF8', (error: NodeJS.ErrnoException, data: string) => {
+			filesys.readFile(filename, 'UTF8', (error: NodeJS.ErrnoException, data: string) => {
 				if (error) {
 					return reject(error.message);
 				}
@@ -22,9 +23,9 @@ export class fsts {
 		});
 	}
 
-	public static readFile(filename: string): Promise<string> {
+	export function readFile(filename: string): Promise<string> {
 		return new Promise<string>((resolve, reject) => {
-			fs.readFile(filename, 'UTF8', (error: NodeJS.ErrnoException, data: string) => {
+			filesys.readFile(filename, 'UTF8', (error: NodeJS.ErrnoException, data: string) => {
 				if (error) {
 					return reject(error.message);
 				}
@@ -34,9 +35,9 @@ export class fsts {
 		});
 	}
 
-	public static stats(path: string): Promise<Stats> {
+	export function stats(path: string): Promise<Stats> {
 		return new Promise<fs.Stats>((resolve, reject) => {
-			fs.stat(path, (error: NodeJS.ErrnoException, stats: Stats) => {
+			filesys.stat(path, (error: NodeJS.ErrnoException, stats: Stats) => {
 				if (error) {
 					return reject(error.message);
 				}
@@ -46,9 +47,35 @@ export class fsts {
 		});
 	}
 
-	public static writeJSON<T>(filename: string, obj: T): Promise<T> {
+	export function readdir(directory: string): Promise<Files> {
+		let files: Files = {};
+
+		return new Promise<{ [name: string]: fs.Stats }>((resolve, reject) => {
+			filesys.readdir(directory, (err: NodeJS.ErrnoException, allFiles: string[]) => {
+				if (err) {
+					reject(err.message);
+					return;
+				}
+
+				return allFiles.reduce((p: Promise<Files>, file: string) => {
+					return p.then(() => {
+						let stats = filesys.statSync(path.join(directory, file));
+
+						files[file] = stats;
+
+						return files;
+					});
+				}, Promise.resolve<Files>(files))
+					.then(() => {
+						resolve(files);
+					});
+			});
+		});
+	}
+	
+	export function writeJSON<T>(filename: string, obj: T): Promise<T> {
 		return new Promise<T>((resolve, reject) => {
-			fs.writeFile(filename, JSON.stringify(obj), (error: NodeJS.ErrnoException) => {
+			filesys.writeFile(filename, JSON.stringify(obj), (error: NodeJS.ErrnoException) => {
 				if (error) {
 					return reject(error.message);
 				}
@@ -58,9 +85,9 @@ export class fsts {
 		});
 	}
 
-	public static mkdir(path: string): Promise<void> {
+	export function mkdir(path: string): Promise<void> {
 		return new Promise<void>((resolve, reject) => {
-			fs.mkdir(path, (error: NodeJS.ErrnoException) => {
+			filesys.mkdir(path, (error: NodeJS.ErrnoException) => {
 				if (error && error.code != 'EEXIST') {
 					return reject(error.message);
 				}
@@ -71,3 +98,4 @@ export class fsts {
 	}
 
 }
+
