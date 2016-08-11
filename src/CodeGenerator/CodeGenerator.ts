@@ -1,22 +1,10 @@
 import * as vscode from 'vscode';
 import * as ts from 'typescript';
 import { Generator } from './Generators/Generator';
-import { Declaration } from './Contexts/Declaration';
+import { Declaration, MemberDeclaration } from './Contexts/Declaration';
 import { GeneratorContextProvider } from './GeneratorContextProvider';
 import { InterfaceGeneratorContext } from './Contexts/InterfaceGeneratorContext';
 import { PropertyGeneratorContext } from './Contexts/PropertyGeneratorContext';
-
-class MemberDeclaration {
-	public node: ts.Declaration;
-	public source: ts.SourceFile;
-	public hasImplementation: boolean;
-
-	constructor(node: ts.Declaration, source: ts.SourceFile) {
-		this.node = node;
-		this.source = source;
-		this.hasImplementation = (node.kind == ts.SyntaxKind.MethodDeclaration) || (node.kind == ts.SyntaxKind.PropertyDeclaration);
-	}
-}
 
 class CodeDescription {
 	public name: string;
@@ -57,40 +45,16 @@ class CodeGenerator {
 		this._context = context;
 
 		if (context.type() == PropertyGeneratorContext.type()) {
-			this._allProperties = [new MemberDeclaration(context.declaration.node, context.declaration.sourceFile)];
-			return;
+			this._allProperties = (context as PropertyGeneratorContext).properties;
+		}
+		else {
+			let classContext = context as InterfaceGeneratorContext;
+
+			// All Methods & Properties
+			this._allMethods = classContext.methods;
+			this._allProperties = classContext.properties;
 		}
 
-		let classContext = context as InterfaceGeneratorContext;
-		this._allMethods = this._context.walker.getAllNodesOfType<ts.MethodSignature>(classContext.declaration.sourceFile, ts.SyntaxKind.MethodSignature, null, classContext.declaration.node)
-			.map((method: ts.MethodSignature) => {
-				return new MemberDeclaration(method, classContext.declaration.sourceFile);
-			});
-
-		this._allProperties = this._context.walker.getAllNodesOfType<ts.PropertySignature>(classContext.declaration.sourceFile, ts.SyntaxKind.PropertySignature, null, classContext.declaration.node)
-			.map((property: ts.PropertySignature) => {
-				return new MemberDeclaration(property, classContext.declaration.sourceFile);
-			});
-
-		if (classContext.parents) {
-			classContext.parents.forEach((declarationContext: Declaration) => {
-				let members = this._context.walker.getAllNodesOfType<ts.MethodSignature>(declarationContext.sourceFile, ts.SyntaxKind.MethodSignature, null, declarationContext.node)
-					.map((property: ts.MethodSignature) => {
-						return new MemberDeclaration(property, declarationContext.sourceFile);
-					});
-
-				this._allMethods = members.concat(this._allMethods);
-			});
-
-			classContext.parents.forEach((declarationContext: Declaration) => {
-				let properties = this._context.walker.getAllNodesOfType<ts.PropertySignature>(declarationContext.sourceFile, ts.SyntaxKind.PropertySignature, null, declarationContext.node)
-					.map((property: ts.PropertySignature) => {
-						return new MemberDeclaration(property, declarationContext.sourceFile);
-					});
-
-				this._allProperties = properties.concat(this._allProperties);
-			});
-		}
 	}
 
 	public generateAll(): Thenable<boolean> {

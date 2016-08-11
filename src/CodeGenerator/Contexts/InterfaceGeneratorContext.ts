@@ -1,10 +1,13 @@
 import * as ts from 'typescript';
 import { CodeGeneratorContext } from './CodeGeneratorContext';
 import { TreeWalker } from './TreeWalker';
-import { Declaration } from './Declaration';
+import { Declaration, MemberDeclaration } from './Declaration';
 
 
 export class InterfaceGeneratorContext extends CodeGeneratorContext<ts.ClassDeclaration> {
+
+	private _allMethods: Array<MemberDeclaration>;
+	private _allProperties: Array<MemberDeclaration>;
 
 	private _parents: Array<Declaration>;
 	public get parents(): Array<Declaration> {
@@ -22,6 +25,77 @@ export class InterfaceGeneratorContext extends CodeGeneratorContext<ts.ClassDecl
 
 	public static type(): string {
 		return "InterfaceGeneratorContext";
+	}
+
+	public get properties(): Array<MemberDeclaration> {
+		if (!this._allProperties) {
+
+			if (this.declaration.isAbstractClass()) {
+				this._allProperties = this.getMethods<ts.PropertyDeclaration>(ts.SyntaxKind.PropertyDeclaration);
+
+				if (this.parents) {
+					this.parents.forEach((declarationContext: Declaration) => {
+						let members = this.getMethods<ts.PropertyDeclaration>(ts.SyntaxKind.PropertyDeclaration, declarationContext);
+
+						this._allProperties = members.concat(this._allProperties);
+					});
+				}
+			}
+			else {
+				this._allProperties = this.getMethods<ts.PropertySignature>(ts.SyntaxKind.PropertySignature);
+
+				if (this.parents) {
+					this.parents.forEach((declarationContext: Declaration) => {
+						let members = this.getMethods<ts.PropertySignature>(ts.SyntaxKind.PropertySignature, declarationContext);
+
+						this._allProperties = members.concat(this._allProperties);
+					});
+				}
+			}
+		}
+
+		return this._allProperties;
+	}
+
+	public get methods(): Array<MemberDeclaration> {
+		if (!this._allMethods) {
+
+			if (this.declaration.isAbstractClass()) {
+				this._allMethods = this.getMethods<ts.MethodDeclaration>(ts.SyntaxKind.MethodDeclaration);
+
+				if (this.parents) {
+					this.parents.forEach((declarationContext: Declaration) => {
+						let members = this.getMethods<ts.MethodDeclaration>(ts.SyntaxKind.MethodDeclaration, declarationContext);
+
+						this._allMethods = members.concat(this._allMethods);
+					});
+				}
+			}
+			else {
+				this._allMethods = this.getMethods<ts.MethodSignature>(ts.SyntaxKind.MethodSignature);
+
+				if (this.parents) {
+					this.parents.forEach((declarationContext: Declaration) => {
+						let members = this.getMethods<ts.MethodSignature>(ts.SyntaxKind.MethodSignature, declarationContext);
+
+						this._allMethods = members.concat(this._allMethods);
+					});
+				}
+			}
+		}
+
+		return this._allMethods;
+	}
+
+	private getMethods<T extends ts.Declaration>(kind: ts.SyntaxKind, declaration?: Declaration): Array<MemberDeclaration> {
+		if (!declaration) {
+			declaration = this.declaration;
+		}
+
+		return this.walker.getAllNodesOfType<T>(declaration.sourceFile, kind, null, declaration.node)
+			.map((method: T) => {
+				return new MemberDeclaration(method, declaration.sourceFile);
+			});
 	}
 
 	private createParentsHierarchy(currentTypeSource: ts.SourceFile, currentType: ts.InterfaceDeclaration | ts.ClassDeclaration) {
