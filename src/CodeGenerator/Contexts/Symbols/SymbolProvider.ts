@@ -200,7 +200,7 @@ export class SymbolProvider implements vscode.Disposable {
 	}
 
 	/**
-	 * Create the dictionary
+	 * Create or update the dictionary
 	 * 
 	 * @protected
 	 * @returns {Thenable<SymbolProvider>}
@@ -211,6 +211,7 @@ export class SymbolProvider implements vscode.Disposable {
 		// 
 		let processedFile = new Array<string>();
 
+		// For all file in the workspace
 		return this.listFile(rootPath, (filepath: string, stats: fs.Stats) => {
 			let relativePath = path.relative(rootPath, filepath);
 			processedFile.push(relativePath);
@@ -331,46 +332,64 @@ export class SymbolProvider implements vscode.Disposable {
 			this.processNode(this._walker, sourceFile, filepath, relativePath, sourceFile)
 
 			resolve();
-
 		});
 	}
 
+	/**
+	 * Update an existing file
+	 * 
+	 * @protected
+	 * @param {string} filepath File path to add
+	 * @param {string} relativePath Relative path
+	 * @param {fs.Stats} [stats] File stats if already known
+	 * @returns {Promise<void>} Return a promise
+	 */
 	protected updateDictionaryEntry(filepath: string, relativePath: string, stats?: fs.Stats): Promise<void> {
-		if (stats) {
-			return this.doUpdate(filepath, relativePath, stats);
-		}
 
-		return fs.stats(filepath)
-			.then((stats: fs.Stats) => {
-				return this.doUpdate(filepath, relativePath, stats);
-			});
-	}
-
-	protected doUpdate(filepath: string, relativePath: string, stats: fs.Stats): Promise<void> {
-		let dateStr = stats.mtime.toISOString();
-
-		// Somthing Changed?
-		if (this._dictionary.files[relativePath] == dateStr) {
-			return;
-		}
-
-		this._dictionary.files[relativePath] = dateStr;
-
-		// 
-		let extension = path.parse(relativePath).ext;
-		let symbolPath = relativePath.substr(0, relativePath.length - extension.length);
-
-		// Remove all elements from the processing file
-		for (let key in this._dictionary.symbols) {
-			if (this._dictionary.symbols[key].relativePath == symbolPath) {
-				delete this._dictionary.symbols[key];
+		return new Promise<fs.Stats>((resolve, reject) => {
+			if (stats) {
+				return resolve(stats);
 			}
-		}
 
-		// Reprocess the file
-		return this.processFile(filepath, relativePath);
+			return fs.stats(filepath)
+				.then(resolve)
+				.catch(reject);
+		}).then((fileStats: fs.Stats) => {
+			let dateStr = fileStats.mtime.toISOString();
+
+			// Something Changed?
+			if (this._dictionary.files[relativePath] == dateStr) {
+				return;
+			}
+
+			// Update
+			this._dictionary.files[relativePath] = dateStr;
+
+			// 
+			let extension = path.parse(relativePath).ext;
+			let symbolPath = relativePath.substr(0, relativePath.length - extension.length);
+
+			// Remove all elements from the processing file
+			for (let key in this._dictionary.symbols) {
+				if (this._dictionary.symbols[key].relativePath == symbolPath) {
+					delete this._dictionary.symbols[key];
+				}
+			}
+
+			// Reprocess the file
+			return this.processFile(filepath, relativePath);
+		});
 	}
 
+	/**
+	 * Add new file to the symbols dictionary
+	 * 
+	 * @protected
+	 * @param {string} filepath File path to add
+	 * @param {string} relativePath Relative path
+	 * @param {fs.Stats} [stats] File stats if already known
+	 * @returns {Promise<void>} Return a promise
+	 */
 	protected addToDictionary(filepath: string, relativePath: string, stats?: fs.Stats): Promise<void> {
 		// Load the file
 		return this.processFile(filepath, relativePath)
@@ -378,7 +397,7 @@ export class SymbolProvider implements vscode.Disposable {
 				if (stats) {
 					return stats;
 				}
-				
+
 				return fs.stats(filepath);
 			})
 			.then((stats: fs.Stats) => {
