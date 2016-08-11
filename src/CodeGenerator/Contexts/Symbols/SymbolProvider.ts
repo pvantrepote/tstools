@@ -216,10 +216,10 @@ export class SymbolProvider implements vscode.Disposable {
 			processedFile.push(relativePath);
 
 			if (this._dictionary.files[relativePath]) {
-				return this.updateDictionaryEntry(filepath, relativePath);
+				return this.updateDictionaryEntry(filepath, relativePath, stats);
 			}
 			else {
-				return this.addToDictionary(filepath, relativePath);
+				return this.addToDictionary(filepath, relativePath, stats);
 			}
 		})
 			.then(() => {
@@ -335,36 +335,50 @@ export class SymbolProvider implements vscode.Disposable {
 		});
 	}
 
-	protected updateDictionaryEntry(filepath: string, relativePath: string): Promise<void> {
+	protected updateDictionaryEntry(filepath: string, relativePath: string, stats?: fs.Stats): Promise<void> {
+		if (stats) {
+			return this.doUpdate(filepath, relativePath, stats);
+		}
+
 		return fs.stats(filepath)
 			.then((stats: fs.Stats) => {
-				let dateStr = stats.mtime.toISOString();
-
-				// Somthing Changed?
-				if (this._dictionary.files[relativePath] != dateStr) {
-					this._dictionary.files[relativePath] = dateStr;
-
-					// 
-					let extension = path.parse(relativePath).ext;
-					let symbolPath = relativePath.substr(0, relativePath.length - extension.length);
-
-					// Remove all elements from the processing file
-					for (let key in this._dictionary.symbols) {
-						if (this._dictionary.symbols[key].relativePath == symbolPath) {
-							delete this._dictionary.symbols[key];
-						}
-					}
-
-					// Reprocess the file
-					return this.processFile(filepath, relativePath);
-				}
+				return this.doUpdate(filepath, relativePath, stats);
 			});
 	}
 
-	protected addToDictionary(filepath: string, relativePath: string): Promise<void> {
+	protected doUpdate(filepath: string, relativePath: string, stats: fs.Stats): Promise<void> {
+		let dateStr = stats.mtime.toISOString();
+
+		// Somthing Changed?
+		if (this._dictionary.files[relativePath] == dateStr) {
+			return;
+		}
+
+		this._dictionary.files[relativePath] = dateStr;
+
+		// 
+		let extension = path.parse(relativePath).ext;
+		let symbolPath = relativePath.substr(0, relativePath.length - extension.length);
+
+		// Remove all elements from the processing file
+		for (let key in this._dictionary.symbols) {
+			if (this._dictionary.symbols[key].relativePath == symbolPath) {
+				delete this._dictionary.symbols[key];
+			}
+		}
+
+		// Reprocess the file
+		return this.processFile(filepath, relativePath);
+	}
+
+	protected addToDictionary(filepath: string, relativePath: string, stats?: fs.Stats): Promise<void> {
 		// Load the file
 		return this.processFile(filepath, relativePath)
 			.then(() => {
+				if (stats) {
+					return stats;
+				}
+				
 				return fs.stats(filepath);
 			})
 			.then((stats: fs.Stats) => {
