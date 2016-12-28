@@ -79,7 +79,7 @@ export class TreeWalker {
 				if ((tsConfig) && (tsConfig.compilerOptions.target)) {
 					switch (tsConfig.compilerOptions.target) {
 						case 'es6':
-							this._options.target = ts.ScriptTarget.ES6;
+							this._options.target = ts.ScriptTarget.ES2015;
 							break;
 						case 'es5':
 							this._options.target = ts.ScriptTarget.ES5;

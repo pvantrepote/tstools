@@ -32,7 +32,18 @@ export class GeneratorContextProvider {
 		// Is it the same file?
 		let documentModulePath = './' + (path.parse(documentPath).name);
 		let filepath = path.join(vscode.workspace.rootPath, symbol.relativePath);
-		let moduleDirectory = './' + path.relative(sourceFolder, filepath);
+		let moduleDirectory = path.relative(sourceFolder, filepath);
+
+		if (moduleDirectory != null) { 
+			// Clean path to provide invariant slashes
+			moduleDirectory = moduleDirectory.replace(/\\/g, "/").replace(/\/\//g, "/");
+			if (!moduleDirectory.startsWith("./") &&
+				!moduleDirectory.startsWith("../") &&
+				!moduleDirectory.startsWith("/")) {
+				moduleDirectory = "./" + moduleDirectory;
+			}
+		}
+
 		if (moduleDirectory == documentModulePath) {
 			return null;
 		}

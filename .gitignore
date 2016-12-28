@@ -3,3 +3,4 @@ node_modules
 typings
 *.vsix
 symbols.json
+.vscode-test
